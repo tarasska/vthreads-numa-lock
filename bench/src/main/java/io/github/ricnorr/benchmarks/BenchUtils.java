@@ -14,24 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import io.github.ricnorr.numa_locks.CLH;
-import io.github.ricnorr.numa_locks.CNA;
-import io.github.ricnorr.numa_locks.HCLH;
-import io.github.ricnorr.numa_locks.HMCSCcl;
-import io.github.ricnorr.numa_locks.HMCSCclNuma;
-import io.github.ricnorr.numa_locks.HMCSCclNumaSupernuma;
-import io.github.ricnorr.numa_locks.HMCSNuma;
-import io.github.ricnorr.numa_locks.HMCSNumaSupernuma;
-import io.github.ricnorr.numa_locks.HSPIN;
-import io.github.ricnorr.numa_locks.LockUtils;
-import io.github.ricnorr.numa_locks.MCS;
-import io.github.ricnorr.numa_locks.NumaMCS;
-import io.github.ricnorr.numa_locks.NumaReentrantLock;
-import io.github.ricnorr.numa_locks.TAS;
-import io.github.ricnorr.numa_locks.TTAS;
-import io.github.ricnorr.numa_locks.Ticket;
-import io.github.ricnorr.numa_locks.VNA_2_Q;
-import io.github.ricnorr.numa_locks.VthreadNumaLock;
+import io.github.ricnorr.numa_locks.*;
 import org.apache.commons.io.FileUtils;
 
 public class BenchUtils {
@@ -116,6 +99,9 @@ public class BenchUtils {
             }
             case HSPIN_WITHOUT_FAST -> {
                 return new HSPIN(false);
+            }
+            case RTL_MCS -> {
+                return new RTLMcs();
             }
             default -> throw new BenchmarkException("Can't init lockType " + lockType.name());
         }

@@ -100,4 +100,5 @@ public enum LockType {
 
     HSPIN_WITHOUT_FAST,
 
+    RTL_MCS
 }
