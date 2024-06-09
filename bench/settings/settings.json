@@ -1,6 +1,34 @@
 {
   "benches": [
     {
+      "name": "parallelFor",
+      "payload": {
+        "actionsCount": 64000,
+        "beforeCpuTokens": 0,
+        "inCpuTokens": 0,
+        "pfCpuTokens": 10000,
+        "taskInCrit": 6,
+        "warmupIterations": 5,
+        "measurementIterations": 5,
+        "forks": 3,
+        "yieldsBefore": 1,
+        "yieldInCrit": true,
+        "title": "Parallel for. High contention.",
+        "skip": false,
+        "locks": [
+          {
+            "name": "VNA"
+          },
+          {
+            "name": "RTL_MCS"
+          },
+          {
+            "name": "UNFAIR_REENTRANT"
+          }
+        ]
+      }
+    },
+    {
       "name": "consumeCpu",
       "payload": {
         "actionsCount": 64000,
@@ -85,7 +113,7 @@
         "threadsFrom": 4,
         "forks": 3,
         "title": "Matrix mult, 50x50 in с.s, 0x0 out of c.s",
-        "skip": false,
+        "skip": true,
         "locks": [
           {
             "name": "HSPIN_WITH_FAST"
@@ -107,7 +135,7 @@
         "threadsFrom": 4,
         "forks": 3,
         "title": "Matrix mult, 15x15 in с.s, 100x100 out of c.s",
-        "skip": false,
+        "skip": true,
         "locks": [
           {
             "name": "HSPIN_WITH_FAST"

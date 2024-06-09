@@ -7,10 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.ricnorr.benchmarks.BenchUtils;
 import io.github.ricnorr.benchmarks.BenchmarkResultsCsv;
 import io.github.ricnorr.benchmarks.Main;
-import io.github.ricnorr.benchmarks.params.ConsumeCpuBenchmarkParameters;
-import io.github.ricnorr.benchmarks.params.MatrixMultiplicationBenchmarkParameters;
-import io.github.ricnorr.benchmarks.params.PriorityQueueBenchmarkParameters;
-import io.github.ricnorr.benchmarks.params.TextStatBenchmarkParameter;
+import io.github.ricnorr.benchmarks.params.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.openjdk.jmh.runner.Runner;
@@ -40,6 +37,21 @@ public class JmhBenchmarkRunner {
           consumeCpuBenchmarkParameters.threads = Main.autoThreadsInit();
         }
         paramList.addAll(consumeCpuBenchmarkParameters.getOptions());
+      } else if (name.equals("parallelFor")) {
+        ParallelForBenchmarkParameters pfBenchmarkParameters;
+        try {
+          pfBenchmarkParameters =
+              new ObjectMapper().readValue(payload.toJSONString(), ParallelForBenchmarkParameters.class);
+        } catch (Exception e) {
+          throw new RuntimeException("Failed to parse payload of benchmark, err=" + e.getMessage());
+        }
+        if (pfBenchmarkParameters.skip) {
+          continue;
+        }
+        if (pfBenchmarkParameters.threads == null) {
+          pfBenchmarkParameters.threads = Main.autoThreadsInit();
+        }
+        paramList.addAll(pfBenchmarkParameters.getOptions());
       } else if (name.equals("priority-queue")) {
         PriorityQueueBenchmarkParameters priorityQueueBenchmarkParameters;
         try {

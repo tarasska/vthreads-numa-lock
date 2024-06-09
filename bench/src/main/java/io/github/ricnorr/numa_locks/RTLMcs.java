@@ -26,7 +26,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     }
 
 
-    private static int MAX_QUEUE_CNT = LockUtils.NUMA_NODES_CNT * 2;
+    private static final int MAX_QUEUE_CNT = LockUtils.NUMA_NODES_CNT * 2;
 
     int maxFastLocks = 1;
     int cores = Runtime.getRuntime().availableProcessors();
@@ -37,7 +37,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     ThreadLocal<LockStrategy> cachedLockStrategy = ThreadLocal.withInitial(() -> LockStrategy.NUMA_MCS);
 
     volatile boolean globalLock = false;
-    final AtomicInteger tickets = new AtomicInteger(0);
+    final AtomicInteger waitersCounter = new AtomicInteger(0);
     final List<AtomicReference<Node>> queues;
 
 
@@ -51,7 +51,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
 
     @Override
     public UnlockInfo lock() {
-        var ticket = tickets.getAndIncrement();
+        var ticket = waitersCounter.getAndIncrement();
         if (acquireGlobalLock()) {
             return new UnlockInfo().withNowTime();
         }
@@ -99,8 +99,8 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     @Override
     public void unlock(UnlockInfo unlockInfo) {
         long csEndTime = System.nanoTime();
-        globalLock = false;
-        int ticket = tickets.getAndDecrement();
+        releaseGlobalLock();
+        int ticket = waitersCounter.getAndDecrement();
 
         long csTimeSize = csEndTime - unlockInfo.beginCsTime;
 
@@ -189,6 +189,10 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
 
     private boolean acquireGlobalLock() {
         return VALUE.compareAndSet(this, false, true);
+    }
+
+    private void releaseGlobalLock() {
+        VALUE.set(this, false);
     }
 
     private long medianSignDiff(long stepResult, long currentMedian) {
