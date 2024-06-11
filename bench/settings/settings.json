@@ -4,16 +4,16 @@
       "name": "parallelFor",
       "payload": {
         "actionsCount": 64000,
-        "beforeCpuTokens": 0,
+        "beforeCpuTokens": 1000,
         "inCpuTokens": 0,
         "pfCpuTokens": 10000,
-        "taskInCrit": 6,
+        "taskInCrit": 12,
         "warmupIterations": 5,
         "measurementIterations": 5,
         "forks": 3,
         "yieldsBefore": 1,
         "yieldInCrit": true,
-        "title": "Parallel for. High contention.",
+        "title": "Parallel for. High contention. 12 task",
         "skip": false,
         "locks": [
           {
@@ -24,6 +24,40 @@
           },
           {
             "name": "UNFAIR_REENTRANT"
+          },
+          {
+            "name": "MCS"
+          }
+        ]
+      }
+    },
+    {
+      "name": "parallelFor",
+      "payload": {
+        "actionsCount": 64000,
+        "beforeCpuTokens": 1000,
+        "inCpuTokens": 0,
+        "pfCpuTokens": 10000,
+        "taskInCrit": 48,
+        "warmupIterations": 5,
+        "measurementIterations": 5,
+        "forks": 3,
+        "yieldsBefore": 1,
+        "yieldInCrit": true,
+        "title": "Parallel for. High contention. 48 task",
+        "skip": false,
+        "locks": [
+          {
+            "name": "VNA"
+          },
+          {
+            "name": "RTL_MCS"
+          },
+          {
+            "name": "UNFAIR_REENTRANT"
+          },
+          {
+            "name": "MCS"
           }
         ]
       }
