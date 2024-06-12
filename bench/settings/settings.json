@@ -6,13 +6,14 @@
         "actionsCount": 64000,
         "beforeCpuTokens": 1000,
         "inCpuTokens": 0,
-        "pfCpuTokens": 10000,
+        "pfCpuTokens": 5000,
         "taskInCrit": 12,
-        "warmupIterations": 5,
+        "warmupIterations": 3,
         "measurementIterations": 5,
-        "forks": 3,
+        "forks": 2,
         "yieldsBefore": 1,
         "yieldInCrit": true,
+        "threadsFrom": 12,
         "title": "Parallel for. High contention. 12 task",
         "skip": false,
         "locks": [
@@ -26,7 +27,7 @@
             "name": "UNFAIR_REENTRANT"
           },
           {
-            "name": "MCS"
+            "name": "MCS_PARK"
           }
         ]
       }
@@ -37,11 +38,11 @@
         "actionsCount": 64000,
         "beforeCpuTokens": 1000,
         "inCpuTokens": 0,
-        "pfCpuTokens": 10000,
+        "pfCpuTokens": 5000,
         "taskInCrit": 48,
-        "warmupIterations": 5,
+        "warmupIterations": 3,
         "measurementIterations": 5,
-        "forks": 3,
+        "forks": 2,
         "yieldsBefore": 1,
         "yieldInCrit": true,
         "title": "Parallel for. High contention. 48 task",
@@ -57,7 +58,7 @@
             "name": "UNFAIR_REENTRANT"
           },
           {
-            "name": "MCS"
+            "name": "MCS_PARK"
           }
         ]
       }
