@@ -124,9 +124,6 @@ public class JmhBenchmarkRunner {
       throw new RuntimeException(e);
       //withLocksNanos = List.of(Double.MAX_VALUE);
     }
-    if (withLocksNanos.isEmpty()) {
-      throw new RuntimeException("No result found in benchmark");
-    }
     int threads = Integer.parseInt(options.getParameter("threads").get().stream().findFirst().get());
     var actionsCountParams = options.getParameter("actionsCount");
     int actionsCount = 0;
@@ -140,6 +137,16 @@ public class JmhBenchmarkRunner {
         String.format("Cores: %d. %s", BenchUtils.CORES_CNT,
             options.getParameter("title").get().stream().findFirst().get());
     String lockType = options.getParameter("lockType").get().stream().findFirst().get();
+
+    if (withLocksNanos.isEmpty()) {
+//      throw new RuntimeException("No result found in benchmark");
+      return new BenchmarkResultsCsv(
+          title,
+          lockType,
+          threads,
+          0, 0, 0, 0, 0,
+          0, 0, 0, 0);
+    }
 //    var latenciesNanos = Utils.readLatenciesFromDirectory(warmupIterations + measurementIterations, threads);
 //    var medianLatenciesNanos = Utils.medianLatency(warmupIterations, latenciesNanos);
 //    var averageLatenciesNanos = Utils.averageLatency(warmupIterations, latenciesNanos);

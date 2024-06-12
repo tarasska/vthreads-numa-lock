@@ -13,7 +13,6 @@
         "forks": 2,
         "yieldsBefore": 1,
         "yieldInCrit": true,
-        "threadsFrom": 12,
         "title": "Parallel for. High contention. 12 task",
         "skip": false,
         "locks": [

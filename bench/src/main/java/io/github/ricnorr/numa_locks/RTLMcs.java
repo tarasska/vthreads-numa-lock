@@ -4,54 +4,61 @@ import jdk.internal.vm.annotation.Contended;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.ArrayList;
+import java.lang.reflect.Array;
 import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 @Contended
 public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
 
-    private static final VarHandle VALUE;
+    private static final VarHandle GLOBAL_LOCK;
+    private static final VarHandle WAITERS_COUNTER;
+    private static final VarHandle TRAIN_DATA;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.lookup();
-            VALUE = l.findVarHandle(RTLMcs.class, "globalLock", Boolean.TYPE);
+            GLOBAL_LOCK = l.findVarHandle(RTLMcs.class, "globalLock", Boolean.TYPE);
+            WAITERS_COUNTER = l.findVarHandle(RTLMcs.class, "waitersCounter", Integer.TYPE);
+            TRAIN_DATA = l.findVarHandle(RTLMcs.class, "trainData", TrainNode.class);
         } catch (ReflectiveOperationException var1) {
             throw new ExceptionInInitializerError(var1);
         }
     }
 
 
-    private static final int MAX_QUEUE_CNT = LockUtils.NUMA_NODES_CNT * 2;
+    private static final int MAX_QUEUE_CNT = LockUtils.NUMA_NODES_CNT;
 
-    int maxFastLocks = 1;
-    int cores = Runtime.getRuntime().availableProcessors();
-    int numaSize = cores / LockUtils.NUMA_NODES_CNT;
+    private static final int maxFastLocks = 4;
+    private static final int cores = Runtime.getRuntime().availableProcessors();
+    private static final int numaSize = cores / LockUtils.NUMA_NODES_CNT;
 
-    AtomicReference<TrainNode> trainData = new AtomicReference<>(new TrainNode(0, 1, 300));
     ThreadLocal<Integer> acqToStrategyReload = ThreadLocal.withInitial(() -> 0);
     ThreadLocal<LockStrategy> cachedLockStrategy = ThreadLocal.withInitial(() -> LockStrategy.NUMA_MCS);
+    ThreadLocal<Integer> numaNodeThreadLocal = ThreadLocal.withInitial(LockUtils::getNumaNodeId);
+    ThreadLocal<Integer> lockAcquiresThreadLocal = ThreadLocal.withInitial(() -> 0);
+    volatile TrainNode trainData = new TrainNode(0, 1, 300);
+
 
     volatile boolean globalLock = false;
-    final AtomicInteger waitersCounter = new AtomicInteger(0);
-    final List<AtomicReference<Node>> queues;
+    volatile int waitersCounter = 0;
+    final AtomicReference<Node>[] queues;
 
 
     public RTLMcs() {
-        queues = new ArrayList<>(MAX_QUEUE_CNT);
+        @SuppressWarnings("unchecked")
+        final AtomicReference<Node>[] tmp = (AtomicReference<Node>[]) Array.newInstance(AtomicReference.class, MAX_QUEUE_CNT);
         for (int i = 0; i < MAX_QUEUE_CNT; i++) {
-            queues.add(new AtomicReference<>());
+            tmp[i] = new AtomicReference<>();
         }
+        this.queues = tmp;
     }
 
 
     @Override
     public UnlockInfo lock() {
-        var ticket = waitersCounter.getAndIncrement();
+        var waiters = incWaiters();
         if (acquireGlobalLock()) {
             return new UnlockInfo().withNowTime();
         }
@@ -59,13 +66,13 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
         int acqToStrategyReloadVal = acqToStrategyReload.get();
         if (--acqToStrategyReloadVal <= 0) {
             acqToStrategyReload.set(25);
-            var tdCopy = trainData.getAcquire();
+            var tdCopy = getTrainDataRelaxed();
             long avgCsSize = tdCopy.csTicksMed;
             if (avgCsSize > 5000 || ((tdCopy.maxWaiters < numaSize) && inNumaWork(tdCopy) && (avgCsSize > 1000))) {
                 cachedLockStrategy.set(LockStrategy.MCS);
 
             } else if ((tdCopy.csCount > 1000) && ( // fast spin is not allowed for small training dataset
-                ticket < maxFastLocks || avgCsSize < 200 || (avgCsSize < 1000 && tdCopy.maxWaiters > cores / 10 * 9))) {
+                waiters < maxFastLocks || avgCsSize < 200 || (avgCsSize < 1000 && tdCopy.maxWaiters > cores / 10 * 9))) {
 
                 cachedLockStrategy.set(LockStrategy.SPIN);
             } else {
@@ -80,17 +87,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
 
             case MCS -> lockNumaMcs(0);
 
-            case NUMA_MCS -> {
-                int core = LockUtils.getCpuId();
-                int queueId;
-                if (ticket <= cores) {
-                    queueId = (core / 4) % MAX_QUEUE_CNT;
-                } else {
-                    queueId = core / numaSize;
-                }
-
-                yield lockNumaMcs(queueId);
-            }
+            case NUMA_MCS -> lockNumaMcs(getCachedNumaId());
         };
 
         return unlockInfo.withNowTime();
@@ -100,7 +97,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     public void unlock(UnlockInfo unlockInfo) {
         long csEndTime = System.nanoTime();
         releaseGlobalLock();
-        int ticket = waitersCounter.getAndDecrement();
+        int waiters = decWaiters();
 
         long csTimeSize = csEndTime - unlockInfo.beginCsTime;
 
@@ -111,13 +108,13 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
         // Potentially we may lose data, but it's not matter for approximation
         if (csTimeSize > 0) {
             int numa = LockUtils.getNumaNodeId();
-            TrainNode curTrainNode = TrainNode.copyOf(trainData.get());
+            TrainNode curTrainNode = TrainNode.copyOf(getTrainDataRelaxed());
 
             curTrainNode.csTicksMed += medianSignDiff(csTimeSize, curTrainNode.csTicksMed);
             ++curTrainNode.csCount;
             ++curTrainNode.numaCount[numa];
-            curTrainNode.maxWaiters = Math.max(curTrainNode.maxWaiters, ticket);
-            trainData.set(curTrainNode);
+            curTrainNode.maxWaiters = Math.max(curTrainNode.maxWaiters, waiters);
+            setTrainDataRelaxed(curTrainNode);
         }
     }
 
@@ -129,12 +126,12 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     }
 
     private UnlockInfo lockNumaMcs(int queueId) {
-        AtomicReference<Node> tail = queues.get(queueId);
+        AtomicReference<Node> tail = queues[queueId];
         Node node = new Node();
         Node predecessor = tail.getAndSet(node);
 
         if (predecessor != null) {
-            predecessor.next.set(node);
+            predecessor.next = node;
 
             int steps = 1024;
             while (node.locked) {
@@ -147,7 +144,7 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
         Node next = null;
         while (globalLock || !acquireGlobalLock()) {
             if (next == null) {
-                next = node.next.get();
+                next = node.next;
                 if (next != null) {
                     LockSupport.unpark(next.thread);
                 }
@@ -158,9 +155,9 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     }
 
     private void unlockNumaMcs(int queueId, Node node) {
-        AtomicReference<Node> tail = queues.get(queueId);
+        AtomicReference<Node> tail = queues[queueId];
 
-        Node next = node.next.get();
+        Node next = node.next;
         if (next == null) {
 
             if (tail.compareAndSet(node, null)) {
@@ -169,11 +166,11 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
 
             do {
                 Thread.onSpinWait();
-                next = node.next.get();
+                next = node.next;
             } while (next == null);
         }
 
-        node.next.set(null);
+        node.next = null;
         next.locked = false;
         LockSupport.unpark(next.thread);
     }
@@ -188,17 +185,47 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
     }
 
     private boolean acquireGlobalLock() {
-        return VALUE.compareAndSet(this, false, true);
+        return GLOBAL_LOCK.compareAndSet(this, false, true);
     }
 
     private void releaseGlobalLock() {
-        VALUE.set(this, false);
+        GLOBAL_LOCK.set(this, false);
+    }
+
+    private int incWaiters() {
+        return (int) WAITERS_COUNTER.getAndAdd(this, 1);
+    }
+
+    private int decWaiters() {
+        return (int) WAITERS_COUNTER.getAndAdd(this, -1);
+    }
+
+    private TrainNode getTrainDataRelaxed() {
+        return (TrainNode) TRAIN_DATA.get(this);
+    }
+
+    private void setTrainDataRelaxed(TrainNode newTrainData) {
+        TRAIN_DATA.set(this, newTrainData);
     }
 
     private long medianSignDiff(long stepResult, long currentMedian) {
         return Long.signum(stepResult - currentMedian);
     }
 
+    private int getCachedNumaId() {
+        var numaId = LockUtils.getByThreadFromThreadLocal(numaNodeThreadLocal, LockUtils.getCurrentCarrierThread());
+        var lockAcquires =
+            LockUtils.getByThreadFromThreadLocal(lockAcquiresThreadLocal, LockUtils.getCurrentCarrierThread());
+        lockAcquires++;
+        if (lockAcquires >= 10_000) {
+            lockAcquires = 1;
+            LockUtils.setByThreadToThreadLocal(numaNodeThreadLocal, LockUtils.getCurrentCarrierThread(),
+                LockUtils.getNumaNodeId());
+        }
+        LockUtils.setByThreadToThreadLocal(lockAcquiresThreadLocal, LockUtils.getCurrentCarrierThread(), lockAcquires);
+
+        return numaId;
+    }
     enum LockStrategy {
         SPIN,
         MCS,
@@ -231,11 +258,22 @@ public class RTLMcs implements VthreadNumaLock<RTLMcs.UnlockInfo> {
         }
     }
 
-    @Contended
     private static class Node {
-        volatile boolean locked = true;
-        AtomicReference<Node> next = new AtomicReference<>();
-        Thread thread = Thread.currentThread();
+        private static final VarHandle NEXT;
+
+        private final Thread thread = Thread.currentThread();
+
+        private volatile boolean locked = true;
+        private volatile Node next = null;
+
+        static {
+            try {
+                MethodHandles.Lookup l = MethodHandles.lookup();
+                NEXT = l.findVarHandle(RTLMcs.class, "trainData", TrainNode.class);
+            } catch (ReflectiveOperationException var1) {
+                throw new ExceptionInInitializerError(var1);
+            }
+        }
     }
 
     public static class UnlockInfo {

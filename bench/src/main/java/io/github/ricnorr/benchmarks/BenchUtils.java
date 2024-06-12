@@ -40,6 +40,9 @@ public class BenchUtils {
             case MCS -> {
                 return new MCS();
             }
+            case MCS_PARK -> {
+                return new ParkMCS();
+            }
             case TAS -> {
                 return new TAS();
             }
