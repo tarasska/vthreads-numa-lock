@@ -1,5 +1,7 @@
 package io.github.ricnorr.benchmarks.params;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.ricnorr.benchmarks.BenchUtils;
 import io.github.ricnorr.benchmarks.jmh.parallel_for.ParallelForBenchmark;
 import org.openjdk.jmh.profile.AsyncProfiler;
@@ -17,6 +19,8 @@ import static org.openjdk.jmh.runner.options.VerboseMode.NORMAL;
 public class ParallelForBenchmarkParameters implements BenchmarkParameters {
 
     public int taskInCrit;
+
+    public List<Integer> tasksPerRoutine;
 
     public long pfCpuTokens;
 
@@ -75,7 +79,12 @@ public class ParallelForBenchmarkParameters implements BenchmarkParameters {
                 options = options.param("yieldsBefore", Integer.toString(yieldsBefore != null ? yieldsBefore : 1));
                 options = options.param("title", title);
                 options = options.param("taskInCrit", Integer.toString(taskInCrit));
-                options = options.param("pfCpuTokens", Long.toString(pfCpuTokens));
+            try {
+                options = options.param("tasksPerRoutineStr", new ObjectMapper().writeValueAsString(tasksPerRoutine));
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+            options = options.param("pfCpuTokens", Long.toString(pfCpuTokens));
                 options = options.param("actionsCount", Integer.toString(actionsCount));
                 String asyncProfilerParams = profilerParams.get("async");
                 if (asyncProfilerParams != null) {

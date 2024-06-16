@@ -3,7 +3,7 @@
     {
       "name": "parallelFor",
       "payload": {
-        "actionsCount": 64000,
+        "actionsCount": 100000,
         "beforeCpuTokens": 1000,
         "inCpuTokens": 0,
         "pfCpuTokens": 5000,
@@ -13,6 +13,7 @@
         "forks": 2,
         "yieldsBefore": 1,
         "yieldInCrit": true,
+        "tasksPerRoutine": [12, 12, 12],
         "title": "Parallel for. High contention. 12 task",
         "skip": false,
         "locks": [
@@ -27,6 +28,12 @@
           },
           {
             "name": "MCS_PARK"
+          },
+          {
+            "name": "CNA_Q"
+          },
+          {
+            "name": "CNA_QSPIN"
           }
         ]
       }
@@ -34,17 +41,18 @@
     {
       "name": "parallelFor",
       "payload": {
-        "actionsCount": 64000,
+        "actionsCount": 100000,
         "beforeCpuTokens": 1000,
         "inCpuTokens": 0,
         "pfCpuTokens": 5000,
-        "taskInCrit": 48,
+        "taskInCrit": 12,
         "warmupIterations": 3,
         "measurementIterations": 5,
         "forks": 2,
         "yieldsBefore": 1,
         "yieldInCrit": true,
-        "title": "Parallel for. High contention. 48 task",
+        "tasksPerRoutine": [12, 48],
+        "title": "Parallel for. High contention. 12-48 task",
         "skip": false,
         "locks": [
           {
@@ -58,6 +66,50 @@
           },
           {
             "name": "MCS_PARK"
+          },
+          {
+            "name": "CNA_Q"
+          },
+          {
+            "name": "CNA_QSPIN"
+          }
+        ]
+      }
+    },
+    {
+      "name": "parallelFor",
+      "payload": {
+        "actionsCount": 100002,
+        "beforeCpuTokens": 1000,
+        "inCpuTokens": 0,
+        "pfCpuTokens": 5000,
+        "taskInCrit": 12,
+        "warmupIterations": 3,
+        "measurementIterations": 5,
+        "forks": 2,
+        "yieldsBefore": 1,
+        "yieldInCrit": true,
+        "tasksPerRoutine": [12, 48, 24],
+        "title": "Parallel for. High contention. 12-48-24 task",
+        "skip": false,
+        "locks": [
+          {
+            "name": "VNA"
+          },
+          {
+            "name": "RTL_MCS"
+          },
+          {
+            "name": "UNFAIR_REENTRANT"
+          },
+          {
+            "name": "MCS_PARK"
+          },
+          {
+            "name": "CNA_Q"
+          },
+          {
+            "name": "CNA_QSPIN"
           }
         ]
       }
